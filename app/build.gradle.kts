@@ -58,6 +58,10 @@ dependencies {
     // Android Auto - MediaBrowserService
     implementation("androidx.media:media:1.7.0")
 
+    // Android Auto - Car App Library (template-based custom UI)
+    implementation("androidx.car.app:app:1.4.0")
+    implementation("androidx.car.app:app-projected:1.4.0")
+
     // Networking
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")

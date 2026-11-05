@@ -3,7 +3,6 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.MEDIA_CONTENT_CONTROL" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".AutoLyricsApp"
@@ -42,25 +41,21 @@
             </intent-filter>
         </service>
 
-        <!-- Android Auto Media Browser Service -->
+        <!-- Android Auto Car App Service (template based, 3-line Deezer-style view) -->
         <service
-            android:name=".auto.LyricsBrowserService"
+            android:name=".auto.LyricsCarAppService"
             android:exported="true"
             android:label="Lyrics">
             <intent-filter>
-                <action android:name="android.media.browse.MediaBrowserService" />
+                <action android:name="androidx.car.app.CarAppService" />
+                <category android:name="androidx.car.app.category.IOT" />
             </intent-filter>
         </service>
 
-        <!-- Start service on boot / app update so AA discovers it -->
-        <receiver
-            android:name=".auto.BootReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-            </intent-filter>
-        </receiver>
+        <!-- Minimum Car App API level supported -->
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="1" />
 
         <meta-data
             android:name="com.google.android.gms.car.application"
