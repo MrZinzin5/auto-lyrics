@@ -1,99 +1,91 @@
-# Auto Lyrics
+# Auto Lyrics — GLES fork
 
-An Android Auto app that displays synced lyrics for the currently playing song, powered by [LRCLIB](https://lrclib.net/).
+A fork of [efrayim-dev/auto-lyrics](https://github.com/efrayim-dev/auto-lyrics) that rewrites the Android Auto side with a custom OpenGL ES renderer.
+
+Why: Google's Car App host rate-limits non-navigation templates (`PaneTemplate`, `ListTemplate`, …) to one refresh every ~5 seconds. On songs with short lyric lines that cap causes visible line skips. `NavigationTemplate` is exempt from the quota but doesn't natively render content past a small top-left bubble — the real escape hatch is the `SurfaceCallback` it exposes, which lets an app draw whatever it wants on its own.
+
+This fork takes that path: NavigationTemplate + an EGL/GLES 2 pipeline that draws a full-screen lyrics view at ~100 fps, independently of the host's refresh quota.
+
+## Credits
+
+All the backend plumbing — media session capture, LRCLIB client, LRC parser, local cache, phone companion UI, ML Kit translation — is from the upstream project by [@efrayim-dev](https://github.com/efrayim-dev). Full credit goes to them for making this project work at all. If you like this fork, please star the upstream too.
+
+What this fork adds:
+
+- `app/src/main/java/com/autolyrics/auto/LyricsGlRenderer.kt` — EGL14 + OpenGL ES 2 renderer: shader-based textured quad, cached blurred-album background, SoundCloud-style waveform, rolling three-line lyrics.
+- `app/src/main/java/com/autolyrics/auto/LyricsScreen.kt` — NavigationTemplate shell driving the renderer at ~100 fps.
+- `app/src/main/java/com/autolyrics/auto/LyricsSession.kt` + `LyricsCarAppService.kt` — Car App service plumbing.
+- New launcher icon and bumped to `v2.0.0`.
 
 ## Features
 
-- **Synced lyrics on Android Auto** — shows the current lyric line with surrounding context, updated in real-time
-- **Works with any music player** — Spotify, YouTube Music, Apple Music, Poweramp, etc.
-- **Phone companion view** — see lyrics on your phone screen too
-- **Automatic song detection** — picks up whatever is playing via media session APIs
-- **Multi-strategy lyrics lookup** — tries exact match first, falls back to keyword search
+What you see on the Android Auto screen:
+
+- **3 lines of lyrics, centered** — previous, current (bold + shadow), next, with the current one tracked continuously in time.
+- **Rolling scroll** — lines slide into place during the last 30% of each line's duration; your eye never has to chase a jump.
+- **~100 fps refresh** — bypasses the ~5s template quota via `NavigationTemplate` + a custom GLES draw loop.
+- **Blurred album art background** — iterated downscale/upscale chain (no RenderScript), cached per album, with a dark overlay and dominant-color vignette.
+- **Header strip** — rounded cover, title, artist, and a SoundCloud-style waveform whose bar heights are deterministic per track and whose "played" portion fades smoothly bar-by-bar instead of snapping.
+- **Phone companion UI unchanged** — the original phone activity still works, this fork only touches the car side.
+
+And from the upstream project (unchanged by this fork):
+
+- Works with any music player that exposes a MediaSession (Spotify, YouTube Music, Deezer, Poweramp, Apple Music, …)
+- Synced lyrics from [LRCLIB](https://lrclib.net/)
+- Automatic song detection via media session APIs
+- Multi-strategy lyrics lookup (exact match, keyword search, fuzzy fallback)
 
 ## Architecture
 
 ```
-MediaListenerService (NotificationListenerService)
+MediaListenerService (NotificationListenerService)         [upstream]
     │
     ▼
-MediaTracker (singleton, StateFlow)
+MediaTracker (singleton, StateFlow)                        [upstream]
     │   ├── detects song changes → LrcLibClient → LrcParser
     │   └── tracks playback position → updates current lyric index
     │
-    ├─────────────────┐
-    ▼                 ▼
-LyricsScreen      MainActivity
-(Android Auto)    (Phone UI)
+    ├─────────────────────────┐
+    ▼                         ▼
+LyricsScreen                  MainActivity
+(NavigationTemplate)          (Phone UI — upstream)
+    │
+    ▼
+LyricsGlRenderer              [this fork]
+(EGL + GLES2 on the host surface)
 ```
 
-## Setup
+## Building
 
-### Prerequisites
+JDK 17, Android SDK 34, Gradle via the committed wrapper. On Windows:
 
-- Android Studio Hedgehog (2023.1.1) or newer
-- Android SDK 34
-- JDK 17
-- A physical Android device (Android 8.0+)
+```powershell
+$env:JAVA_HOME = "<your jdk17 path>"
+.\gradlew.bat assembleDebug
+```
 
-### Build
+The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 
-1. Open the project in Android Studio
-2. Sync Gradle
-3. Build and install on your device:
-   ```
-   ./gradlew installDebug
-   ```
+## Installing on a phone
 
-### First-Time Setup
+1. Enable Developer options → USB debugging → Install via USB (on Xiaomi/HyperOS, also disable MIUI Optimization or the app will be killed in the background).
+2. `adb install -r app-debug.apk`
+3. Open the app once, grant it **Notification Listener** access when prompted. Without that permission it can't see what Spotify / Deezer / etc. are playing.
 
-1. **Open Auto Lyrics** on your phone
-2. **Grant notification access** — tap the button and enable "Auto Lyrics" in the system settings
-3. **Play a song** in any music app
-4. Lyrics will appear both on the phone and on Android Auto
+## Enabling it in Android Auto
 
-### Testing with Android Auto Desktop Head Unit (DHU)
+Android Auto only shows apps signed by registered developers out of the box. To sideload this one:
 
-1. Install **Android Auto Desktop Head Unit emulator** from SDK Manager → SDK Tools
-2. Enable **Developer mode** in the Android Auto app on your phone (tap version 10 times)
-3. In Android Auto developer settings, enable **Unknown sources**
-4. Start the DHU:
-   ```
-   cd $ANDROID_SDK/extras/google/auto/
-   ./desktop-head-unit
-   ```
-5. Connect your phone via USB with the Android Auto companion app running
-6. Auto Lyrics will appear in the app launcher on the DHU
+1. Open **Android Auto** on the phone → Settings → scroll to **Version** → tap it ~10 times to unlock Developer settings.
+2. Open **Developer settings** → enable **Unknown sources**.
+3. (If the toggle sticks on "off", toggle it a couple of times and reboot the phone — Google occasionally resets this flag.)
 
-### Using on a real car (sideloaded APK)
+## Caveats
 
-Since this app is installed outside the Play Store, Android Auto requires **developer mode** to show it:
-
-1. Open the **Android Auto** app on your phone
-2. Go to **Settings** → scroll to the bottom → tap **Version** 10 times rapidly
-3. You'll see a toast saying "Developer mode enabled"
-4. Tap the **⋮** (three-dot) menu at the top right → **Developer settings**
-5. Enable **"Unknown sources"** (allows sideloaded apps on Android Auto)
-6. Restart Android Auto or disconnect/reconnect to your car
-7. **Auto Lyrics** should now appear in the Android Auto app launcher
-8. Play music — lyrics appear automatically
-
-## How It Works
-
-1. **Media detection**: A `NotificationListenerService` grants access to `MediaSessionManager`, which provides the currently active media controllers
-2. **Song identification**: When the song changes, metadata (title, artist, album, duration) is extracted from the `MediaController`
-3. **Lyrics fetch**: The app queries [LRCLIB](https://lrclib.net/api) — first an exact match (`/api/get`), then a keyword search (`/api/search`) as fallback
-4. **LRC parsing**: Synced lyrics in `[mm:ss.xx] text` format are parsed into timestamped lines
-5. **Position tracking**: Playback position is calculated from the media session's last reported position + elapsed time, checked every 150ms
-6. **Display**: On Android Auto, a `PaneTemplate` shows 4 lyric lines centered on the current one, marked with ▶. The screen refreshes only when the active line changes.
-
-## Limitations
-
-- **Android Auto app categories**: The app registers as an IOT-category Car App. For Google Play distribution, it would need to pass Android Auto app review.
-- **Lyrics availability**: Not all songs have synced lyrics on LRCLIB. The app will show "No synced lyrics available" for missing tracks.
-- **Player compatibility**: Most major music players expose media sessions correctly. Some niche players may not provide full metadata.
-- **Streaming quality tags**: Some music apps (YouTube Music, Tidal, etc.) inject quality info like "Lossless" or "Hi-Res" into metadata fields. The app strips these automatically, but unusual formats may slip through.
-- **Sideloaded apps on Android Auto**: Developer mode must be enabled in Android Auto settings to see sideloaded apps. See setup instructions above.
+- **Debug signing key is in the repo.** `app/signing.p12` is a shared debug key committed to the upstream repo. That's fine for sideloading — anyone who builds this project ends up with APKs signed by the same key — but it means this fork is **not Play-Store-publishable as-is**. Don't upload the debug-signed APKs to download sites either: you'd be distributing something signed by a key you don't actually control.
+- **No guarantees about head-unit compatibility.** This has been verified on the DHU emulator + a Xiaomi 17 phone. Other head units (notably older ones) may have different Surface setups that behave differently with the EGL path.
+- **NavigationTemplate requires declaring NAVIGATION_TEMPLATES + ACCESS_SURFACE** in the manifest. The app does so and calls `NavigationManager.navigationStarted()` + a dummy `updateTrip(Loading)` on resume — this is the host's precondition for handing out the surface.
 
 ## License
 
-MIT
+The upstream repo (`efrayim-dev/auto-lyrics`) does not declare a license. This fork is distributed on the same implicit terms: fork it, build it, run it, learn from it. **Please don't repackage it under your own name**, and if you want to redistribute it in a hardened form (Play Store, APK mirror), please open an issue on the upstream first to ask about licensing.

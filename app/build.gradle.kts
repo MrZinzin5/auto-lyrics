@@ -11,8 +11,8 @@ android {
         applicationId = "com.autolyrics"
         minSdk = 26
         targetSdk = 34
-        versionCode = 30
-        versionName = "1.9.6"
+        versionCode = 31
+        versionName = "2.0.0"
     }
 
     signingConfigs {
@@ -57,6 +57,10 @@ dependencies {
 
     // Android Auto - MediaBrowserService
     implementation("androidx.media:media:1.7.0")
+
+    // Android Auto - Car App Library (template-based custom UI)
+    implementation("androidx.car.app:app:1.4.0")
+    implementation("androidx.car.app:app-projected:1.4.0")
 
     // Networking
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
