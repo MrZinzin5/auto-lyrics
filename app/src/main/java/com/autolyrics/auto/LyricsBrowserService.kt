@@ -435,18 +435,9 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
     private fun getSubtitleText(state: LyricsState): String {
         val posMs = getAaPositionMs()
 
-        if (state.status == LyricsStatus.FOUND) {
-            val lineIdx = findLineIndex(state.lines, posMs)
-            val line = state.lines.getOrNull(lineIdx)
-            if (line != null) {
-                val original = if (aaKaraokeEnabled && line.words.isNotEmpty()) {
-                    buildKaraokeText(line, lineIdx, posMs, SUBTITLE_KARAOKE_WINDOW_MS)
-                } else {
-                    line.text
-                }
-                val trans = state.translatedLines?.getOrNull(lineIdx)?.takeIf { it.isNotBlank() }
-                return if (trans != null) "$original\n$trans" else original
-            }
+        if (state.status == LyricsStatus.FOUND && state.lines.isNotEmpty()) {
+            val lineIdx = findLineIndex(state.lines, posMs).coerceAtLeast(0)
+            return build3LineSubtitle(state, lineIdx, posMs, karaoke = true)
         }
 
         if (state.status == LyricsStatus.PLAIN_ONLY && state.lines.isNotEmpty()) {
@@ -455,9 +446,7 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
                 ((posMs.toFloat() / durationMs) * state.lines.size).toInt()
                     .coerceIn(0, state.lines.size - 1)
             } else { 0 }
-            val original = state.lines[idx].text
-            val trans = state.translatedLines?.getOrNull(idx)?.takeIf { it.isNotBlank() }
-            return if (trans != null) "$original\n$trans" else original
+            return build3LineSubtitle(state, idx, posMs, karaoke = false)
         }
 
         return when (state.status) {
@@ -465,6 +454,30 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             LyricsStatus.NOT_FOUND -> "No lyrics found"
             LyricsStatus.ERROR -> "Error loading lyrics"
             else -> ""
+        }
+    }
+
+    private fun build3LineSubtitle(
+        state: LyricsState,
+        idx: Int,
+        posMs: Long,
+        karaoke: Boolean
+    ): String {
+        val lines = state.lines
+        val prev = lines.getOrNull(idx - 1)?.text?.ifBlank { "♪" } ?: ""
+        val curLine = lines.getOrNull(idx)
+        val curText = when {
+            curLine == null -> "♪"
+            karaoke && aaKaraokeEnabled && curLine.words.isNotEmpty() ->
+                buildKaraokeText(curLine, idx, posMs, SUBTITLE_KARAOKE_WINDOW_MS)
+            else -> curLine.text.ifBlank { "♪" }
+        }
+        val next = lines.getOrNull(idx + 1)?.text?.ifBlank { "♪" } ?: ""
+
+        return buildString {
+            if (prev.isNotEmpty()) appendLine(prev)
+            append("▶  ").append(curText)
+            if (next.isNotEmpty()) append('\n').append(next)
         }
     }
 

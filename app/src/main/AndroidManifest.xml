@@ -42,7 +42,7 @@
             </intent-filter>
         </service>
 
-        <!-- Android Auto Media Browser Service -->
+        <!-- Android Auto Media Browser Service (legacy – MediaBrowser based) -->
         <service
             android:name=".auto.LyricsBrowserService"
             android:exported="true"
@@ -51,6 +51,22 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- Android Auto Car App Service (template based, 3-line Deezer-style view) -->
+        <service
+            android:name=".auto.LyricsCarAppService"
+            android:exported="true"
+            android:label="Lyrics">
+            <intent-filter>
+                <action android:name="androidx.car.app.CarAppService" />
+                <category android:name="androidx.car.app.category.IOT" />
+            </intent-filter>
+        </service>
+
+        <!-- Minimum Car App API level supported -->
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="1" />
 
         <!-- Start service on boot / app update so AA discovers it -->
         <receiver
